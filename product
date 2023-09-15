@@ -448,7 +448,7 @@ switch $argv[1]
         logger 0 'Anna@Build2'
     case '*'
         # def var
-        set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk hysteria_ver
+        set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk hysteria_ver hysteria2
 
         # parse argv
         argparse -i -n $prefix i/init 'c/conf=' 'v/verbose=' 'd/root=' 'p/port=' 'u/upstream=' 'n/nodeid=' 'o/tls_cert=' 'k/tls_key=' 'q/core_path=' 'r/psk=' f/on_the_fly 'b/obfs=' -- $argv
