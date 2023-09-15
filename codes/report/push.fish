@@ -11,37 +11,56 @@ function push
             set basestr[$user] (echo -n "$uuid[$user]" | base64)
         end
         # fetch data from api
-        set raw_statis (curl -sL "http://127.0.0.1:$api_port/metrics" | string collect)
-        if test -z $raw_statis
-            if test "$bodhi_verbose" = debug
-                logger 3 "@bodhi.push CONT -> No usage, skip reporting"
-            end
-            if test "$raw_conf_md5_check" != "$argv[3]"
-                set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
-                if string match -q '*obfs*' -- $raw_conf
-                    logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
-                    break
+        if $hysteria2
+            set raw_statis (curl -sL "http://127.0.0.1:$api_port/traffic")
+            if test "$raw_statis" = "{}"
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
                 end
+                if test "$raw_conf_md5_check" != "$argv[3]"
+                    set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
+                    if string match -q '*obfs*' -- $raw_conf
+                        logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
+                        break
+                    end
+                end
+            else
+                # Loop to collect data High-Passly
+                # Stay tuned
             end
         else
-            # Loop to collect data High-Passly
-            for line_stat in (curl -sL "http://127.0.0.1:$api_port/metrics")
-                if string match -q '*'\#'*' -- $line_stat; or string match -q '*active_conn*' -- $line_stat
-                else
-                    set line_id (contains --index -- (string match -r 'auth="(.+?)"' $line_stat)[2] $basestr)
-                    set usage (math (string split ' ' -- $line_stat)[2])
-                    if string match -rq uplink -- $line_stat
-                        if test -z $last_upload[$line_id]
-                            set last_upload[$line_id] 0
-                        end
-                        set upload[$line_id] (math $usage - $last_upload[$line_id])
-                        set last_upload[$line_id] $usage
+            set raw_statis (curl -sL "http://127.0.0.1:$api_port/metrics" | string collect)
+            if test -z $raw_statis
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
+                end
+                if test "$raw_conf_md5_check" != "$argv[3]"
+                    set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
+                    if string match -q '*obfs*' -- $raw_conf
+                        logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
+                        break
+                    end
+                end
+            else
+                # Loop to collect data High-Passly
+                for line_stat in (curl -sL "http://127.0.0.1:$api_port/metrics")
+                    if string match -q '*'\#'*' -- $line_stat; or string match -q '*active_conn*' -- $line_stat
                     else
-                        if test -z $last_download[$line_id]
-                            set last_download[$line_id] 0
+                        set line_id (contains --index -- (string match -r 'auth="(.+?)"' $line_stat)[2] $basestr)
+                        set usage (math (string split ' ' -- $line_stat)[2])
+                        if string match -rq uplink -- $line_stat
+                            if test -z $last_upload[$line_id]
+                                set last_upload[$line_id] 0
+                            end
+                            set upload[$line_id] (math $usage - $last_upload[$line_id])
+                            set last_upload[$line_id] $usage
+                        else
+                            if test -z $last_download[$line_id]
+                                set last_download[$line_id] 0
+                            end
+                            set download[$line_id] (math $usage - $last_download[$line_id])
+                            set last_download[$line_id] $usage
                         end
-                        set download[$line_id] (math $usage - $last_download[$line_id])
-                        set last_download[$line_id] $usage
                     end
                 end
             end

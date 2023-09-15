@@ -196,6 +196,11 @@ obfs=true' >"$bodhi_conf"
         if test -x "$core_path"
         else
             chmod +x "$core_path"
+            if set hysteria_ver ($core_path -v)
+            else 
+                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                exit 1
+            end
         end
     else
         logger 5 "@bodhi.init HALT -> Hysteria core is not found at bodhi.core_path"
@@ -216,37 +221,56 @@ function push
             set basestr[$user] (echo -n "$uuid[$user]" | base64)
         end
         # fetch data from api
-        set raw_statis (curl -sL "http://127.0.0.1:$api_port/metrics" | string collect)
-        if test -z $raw_statis
-            if test "$bodhi_verbose" = debug
-                logger 3 "@bodhi.push CONT -> No usage, skip reporting"
-            end
-            if test "$raw_conf_md5_check" != "$argv[3]"
-                set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
-                if string match -q '*obfs*' -- $raw_conf
-                    logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
-                    break
+        if $hysteria2
+            set raw_statis (curl -sL "http://127.0.0.1:$api_port/traffic")
+            if test "$raw_statis" = "{}"
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
                 end
+                if test "$raw_conf_md5_check" != "$argv[3]"
+                    set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
+                    if string match -q '*obfs*' -- $raw_conf
+                        logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
+                        break
+                    end
+                end
+            else
+                # Loop to collect data High-Passly
+                # Stay tuned
             end
         else
-            # Loop to collect data High-Passly
-            for line_stat in (curl -sL "http://127.0.0.1:$api_port/metrics")
-                if string match -q '*'\#'*' -- $line_stat; or string match -q '*active_conn*' -- $line_stat
-                else
-                    set line_id (contains --index -- (string match -r 'auth="(.+?)"' $line_stat)[2] $basestr)
-                    set usage (math (string split ' ' -- $line_stat)[2])
-                    if string match -rq uplink -- $line_stat
-                        if test -z $last_upload[$line_id]
-                            set last_upload[$line_id] 0
-                        end
-                        set upload[$line_id] (math $usage - $last_upload[$line_id])
-                        set last_upload[$line_id] $usage
+            set raw_statis (curl -sL "http://127.0.0.1:$api_port/metrics" | string collect)
+            if test -z $raw_statis
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
+                end
+                if test "$raw_conf_md5_check" != "$argv[3]"
+                    set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
+                    if string match -q '*obfs*' -- $raw_conf
+                        logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
+                        break
+                    end
+                end
+            else
+                # Loop to collect data High-Passly
+                for line_stat in (curl -sL "http://127.0.0.1:$api_port/metrics")
+                    if string match -q '*'\#'*' -- $line_stat; or string match -q '*active_conn*' -- $line_stat
                     else
-                        if test -z $last_download[$line_id]
-                            set last_download[$line_id] 0
+                        set line_id (contains --index -- (string match -r 'auth="(.+?)"' $line_stat)[2] $basestr)
+                        set usage (math (string split ' ' -- $line_stat)[2])
+                        if string match -rq uplink -- $line_stat
+                            if test -z $last_upload[$line_id]
+                                set last_upload[$line_id] 0
+                            end
+                            set upload[$line_id] (math $usage - $last_upload[$line_id])
+                            set last_upload[$line_id] $usage
+                        else
+                            if test -z $last_download[$line_id]
+                                set last_download[$line_id] 0
+                            end
+                            set download[$line_id] (math $usage - $last_download[$line_id])
+                            set last_download[$line_id] $usage
                         end
-                        set download[$line_id] (math $usage - $last_download[$line_id])
-                        set last_download[$line_id] $usage
                     end
                 end
             end
@@ -318,14 +342,56 @@ function chamber
     set down_mbps (echo "$raw_conf" | yq .down_mbps)
     set obfs (echo "$raw_conf" | yq .obfs)
     set push_interval (echo "$raw_conf" | yq .base_config.push_interval)
-
-    if test "$obfs" = true
-        echo "{
+    # detect hysteria ver
+    if echo "$hysteria_ver" | string match -q v2
+        set hysteria2 true
+    else
+        set hysteria2 false
+    end
+    if $hysteria2
+        if test "$obfs" = true
+            echo "listen: $server_port
+obfs:
+  type: salamander
+  salamander:
+    password: $obfs
+tls:
+  cert: $tls_cert
+  key: $tls_key
+auth:
+  type: command
+  command: ./knck
+trafficStats:
+  listen: 127.0.0.1:$api_port
+outbounds:
+  - name: defob
+    type: direct
+    direct:
+      mode: 64" >server.yaml
+        else
+            echo "listen: $server_port
+tls:
+  cert: $tls_cert
+  key: $tls_key
+auth:
+  type: command
+  command: ./knck
+trafficStats:
+  listen: 127.0.0.1:$api_port
+outbounds:
+  - name: defob
+    type: direct
+    direct:
+      mode: 64" >server.yaml
+        end
+    else
+        if test "$obfs" = true
+            echo "{
     \"listen\": \":$server_port\",
     \"obfs\": \"$obfs\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
-    \"resolve_preference"\: \"64\",
+    \"resolve_preference\": \"64\",
     \"key\": \"$tls_key\" ,
     \"auth\": {
         \"mode\": \"external\",
@@ -334,12 +400,12 @@ function chamber
         }
     }
 }" >server.json
-    else
-        echo "{
+        else
+            echo "{
     \"listen\": \":$server_port\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
-    \"resolve_preference"\: \"64\",
+    \"resolve_preference\": \"64\",
     \"key\": \"$tls_key\" ,
     \"auth\": {
         \"mode\": \"external\",
@@ -348,6 +414,7 @@ function chamber
         }
     }
 }" >server.json
+        end
     end
     echo '#!/usr/bin/fish
 if ./bin/yq \'.users[].uuid\' userlist | string match -q "$argv[2]"
@@ -356,14 +423,18 @@ else
 end' >knck
     chmod +x knck
     # Launch core
-    $core_path -c ./server.json server &
+    if $hysteria2
+        $core_path -c ./server.yaml server &
+    else
+        $core_path -c ./server.json server &
+    end
     set last_core_pid $last_pid
     if test "$bodhi_verbose" = debug
         logger 3 "@bodhi.chamber CONT -> Core Launched"
     end
     trap handle_stop SIGTSTP
     trap handle_stop SIGTERM
-    trap handle_stop SIGINT 
+    trap handle_stop SIGINT
     push $push_interval $last_core_pid $raw_conf_md5
 end
 
@@ -377,7 +448,7 @@ switch $argv[1]
         logger 0 'Anna@Build2'
     case '*'
         # def var
-        set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk
+        set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk hysteria_ver
 
         # parse argv
         argparse -i -n $prefix i/init 'c/conf=' 'v/verbose=' 'd/root=' 'p/port=' 'u/upstream=' 'n/nodeid=' 'o/tls_cert=' 'k/tls_key=' 'q/core_path=' 'r/psk=' f/on_the_fly 'b/obfs=' -- $argv
