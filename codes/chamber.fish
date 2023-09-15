@@ -35,6 +35,7 @@ function chamber
     \"obfs\": \"$obfs\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
+    \"resolve_preference"\: \"64\",
     \"key\": \"$tls_key\" ,
     \"auth\": {
         \"mode\": \"external\",
@@ -48,6 +49,7 @@ function chamber
     \"listen\": \":$server_port\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
+    \"resolve_preference"\: \"64\",
     \"key\": \"$tls_key\" ,
     \"auth\": {
         \"mode\": \"external\",
