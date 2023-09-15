@@ -30,9 +30,9 @@ function chamber
     set push_interval (echo "$raw_conf" | yq .base_config.push_interval)
     # detect hysteria ver
     if echo "$hysteria_ver" | string match -q v2
-        set hysteria2 true
+        set -x hysteria2 true
     else
-        set hysteria2 false
+        set -x hysteria2 false
     end
     if $hysteria2
         if test "$obfs" = true
