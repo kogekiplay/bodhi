@@ -81,12 +81,12 @@ switch $argv[1]
         # Check ipv6
         if curl -sL ipv6.ip.sb >/dev/null
             if test "$bodhi_verbose" = debug
-                logger 3 "@bodhi.init CONT -> IPV6 Detected"
+                logger 3 "@bodhi.main CONT -> IPV6 Detected"
             end
             set ipv6 true
         else
             if test "$bodhi_verbose" = debug
-                logger 3 "@bodhi.init CONT -> IPV6 Disabled"
+                logger 3 "@bodhi.main CONT -> IPV6 Disabled"
             end
             set ipv6 false
         end
