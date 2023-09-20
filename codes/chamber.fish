@@ -34,9 +34,10 @@ function chamber
     else
         set -x hysteria2 false
     end
-    if $hysteria2
-        if test "$obfs" = true
-            echo "listen: $server_port
+    if $ipv6
+        if $hysteria2
+            if test "$obfs" = true
+                echo "listen: $server_port
 obfs:
   type: salamander
   salamander:
@@ -54,8 +55,8 @@ outbounds:
     type: direct
     direct:
       mode: 64" >server.yaml
-        else
-            echo "listen: $server_port
+            else
+                echo "listen: $server_port
 tls:
   cert: $tls_cert
   key: $tls_key
@@ -69,10 +70,10 @@ outbounds:
     type: direct
     direct:
       mode: 64" >server.yaml
-        end
-    else
-        if test "$obfs" = true
-            echo "{
+            end
+        else
+            if test "$obfs" = true
+                echo "{
     \"listen\": \":$server_port\",
     \"obfs\": \"$obfs\",
     \"cert\": \"$tls_cert\",
@@ -86,8 +87,8 @@ outbounds:
         }
     }
 }" >server.json
-        else
-            echo "{
+            else
+                echo "{
     \"listen\": \":$server_port\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
@@ -100,6 +101,70 @@ outbounds:
         }
     }
 }" >server.json
+            end
+        end
+    else
+        if $hysteria2
+            if test "$obfs" = true
+                echo "listen: $server_port
+obfs:
+  type: salamander
+  salamander:
+    password: $obfs
+tls:
+  cert: $tls_cert
+  key: $tls_key
+auth:
+  type: command
+  command: ./knck
+trafficStats:
+  listen: 127.0.0.1:$api_port
+outbounds:
+  - name: defob
+    type: direct" >server.yaml
+            else
+                echo "listen: $server_port
+tls:
+  cert: $tls_cert
+  key: $tls_key
+auth:
+  type: command
+  command: ./knck
+trafficStats:
+  listen: 127.0.0.1:$api_port
+outbounds:
+  - name: defob
+    type: direct" >server.yaml
+            end
+        else
+            if test "$obfs" = true
+                echo "{
+    \"listen\": \":$server_port\",
+    \"obfs\": \"$obfs\",
+    \"cert\": \"$tls_cert\",
+    \"prometheus_listen\": \"127.0.0.1:$api_port\",
+    \"key\": \"$tls_key\" ,
+    \"auth\": {
+        \"mode\": \"external\",
+        \"config\": {
+            \"cmd\": \"./knck\"
+        }
+    }
+}" >server.json
+            else
+                echo "{
+    \"listen\": \":$server_port\",
+    \"cert\": \"$tls_cert\",
+    \"prometheus_listen\": \"127.0.0.1:$api_port\",
+    \"key\": \"$tls_key\" ,
+    \"auth\": {
+        \"mode\": \"external\",
+        \"config\": {
+            \"cmd\": \"./knck\"
+        }
+    }
+}" >server.json
+            end
         end
     end
     echo '#!/usr/bin/fish

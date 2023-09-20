@@ -197,7 +197,7 @@ obfs=true' >"$bodhi_conf"
         else
             chmod +x "$core_path"
             if set hysteria_ver ($core_path -v)
-            else 
+            else
                 logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
                 exit 1
             end
@@ -205,6 +205,18 @@ obfs=true' >"$bodhi_conf"
     else
         logger 5 "@bodhi.init HALT -> Hysteria core is not found at bodhi.core_path"
         exit 1
+    end
+    # Check ipv6
+    if curl -sL ipv6.ip.sb >/dev/null
+        if test "$bodhi_verbose" = debug
+            logger 3 "@bodhi.init CONT -> IPV6 Detected"
+        end
+        set ipv6 true
+    else
+        if test "$bodhi_verbose" = debug
+            logger 3 "@bodhi.init CONT -> IPV6 Disabled"
+        end
+        set ipv6 false
     end
 end
 
@@ -348,9 +360,10 @@ function chamber
     else
         set -x hysteria2 false
     end
-    if $hysteria2
-        if test "$obfs" = true
-            echo "listen: $server_port
+    if $ipv6
+        if $hysteria2
+            if test "$obfs" = true
+                echo "listen: $server_port
 obfs:
   type: salamander
   salamander:
@@ -368,8 +381,8 @@ outbounds:
     type: direct
     direct:
       mode: 64" >server.yaml
-        else
-            echo "listen: $server_port
+            else
+                echo "listen: $server_port
 tls:
   cert: $tls_cert
   key: $tls_key
@@ -383,10 +396,10 @@ outbounds:
     type: direct
     direct:
       mode: 64" >server.yaml
-        end
-    else
-        if test "$obfs" = true
-            echo "{
+            end
+        else
+            if test "$obfs" = true
+                echo "{
     \"listen\": \":$server_port\",
     \"obfs\": \"$obfs\",
     \"cert\": \"$tls_cert\",
@@ -400,8 +413,8 @@ outbounds:
         }
     }
 }" >server.json
-        else
-            echo "{
+            else
+                echo "{
     \"listen\": \":$server_port\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
@@ -414,6 +427,70 @@ outbounds:
         }
     }
 }" >server.json
+            end
+        end
+    else
+        if $hysteria2
+            if test "$obfs" = true
+                echo "listen: $server_port
+obfs:
+  type: salamander
+  salamander:
+    password: $obfs
+tls:
+  cert: $tls_cert
+  key: $tls_key
+auth:
+  type: command
+  command: ./knck
+trafficStats:
+  listen: 127.0.0.1:$api_port
+outbounds:
+  - name: defob
+    type: direct" >server.yaml
+            else
+                echo "listen: $server_port
+tls:
+  cert: $tls_cert
+  key: $tls_key
+auth:
+  type: command
+  command: ./knck
+trafficStats:
+  listen: 127.0.0.1:$api_port
+outbounds:
+  - name: defob
+    type: direct" >server.yaml
+            end
+        else
+            if test "$obfs" = true
+                echo "{
+    \"listen\": \":$server_port\",
+    \"obfs\": \"$obfs\",
+    \"cert\": \"$tls_cert\",
+    \"prometheus_listen\": \"127.0.0.1:$api_port\",
+    \"key\": \"$tls_key\" ,
+    \"auth\": {
+        \"mode\": \"external\",
+        \"config\": {
+            \"cmd\": \"./knck\"
+        }
+    }
+}" >server.json
+            else
+                echo "{
+    \"listen\": \":$server_port\",
+    \"cert\": \"$tls_cert\",
+    \"prometheus_listen\": \"127.0.0.1:$api_port\",
+    \"key\": \"$tls_key\" ,
+    \"auth\": {
+        \"mode\": \"external\",
+        \"config\": {
+            \"cmd\": \"./knck\"
+        }
+    }
+}" >server.json
+            end
         end
     end
     echo '#!/usr/bin/fish
@@ -448,7 +525,7 @@ switch $argv[1]
         logger 0 'Anna@Build2'
     case '*'
         # def var
-        set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk hysteria_ver
+        set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk hysteria_ver ipv6
 
         # parse argv
         argparse -i -n $prefix i/init 'c/conf=' 'v/verbose=' 'd/root=' 'p/port=' 'u/upstream=' 'n/nodeid=' 'o/tls_cert=' 'k/tls_key=' 'q/core_path=' 'r/psk=' f/on_the_fly 'b/obfs=' -- $argv
