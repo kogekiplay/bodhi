@@ -99,16 +99,4 @@ obfs=true' >"$bodhi_conf"
         logger 5 "@bodhi.init HALT -> Hysteria core is not found at bodhi.core_path"
         exit 1
     end
-    # Check ipv6
-    if curl -sL ipv6.ip.sb >/dev/null
-        if test "$bodhi_verbose" = debug
-            logger 3 "@bodhi.init CONT -> IPV6 Detected"
-        end
-        set ipv6 true
-    else
-        if test "$bodhi_verbose" = debug
-            logger 3 "@bodhi.init CONT -> IPV6 Disabled"
-        end
-        set ipv6 false
-    end
 end
