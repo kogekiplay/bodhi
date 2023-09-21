@@ -28,8 +28,34 @@ function chamber
     set down_mbps (echo "$raw_conf" | yq .down_mbps)
     set obfs (echo "$raw_conf" | yq .obfs)
     set push_interval (echo "$raw_conf" | yq .base_config.push_interval)
+    # Check TLSnec
+    # Check core
+    if test -e $tls_cert; and test -e $tls_key
+    else
+        logger 5 "@bodhi.init HALT -> TLS cert or TLS key is not found at bodhi.tls_x"
+        exit 1
+    end
+    if test -e "$core_path"
+        if test -x "$core_path"
+            if set hysteria_ver ($core_path version)
+            else
+                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                exit 1
+            end
+        else
+            chmod +x "$core_path"
+            if set hysteria_ver ($core_path version)
+            else
+                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                exit 1
+            end
+        end
+    else
+        logger 5 "@bodhi.init HALT -> Hysteria core is not found at bodhi.core_path"
+        exit 1
+    end
     # detect hysteria ver
-    if echo "$hysteria_ver" | string match -q v2
+    if echo "$hysteria_ver" | string match -qe v2
         set -x hysteria2 true
     else
         set -x hysteria2 false
@@ -37,12 +63,13 @@ function chamber
     if $ipv6
         if $hysteria2
             if test "$obfs" = true
-                echo "listen: $server_port
+                echo "listen: :$server_port
 obfs:
   type: salamander
   salamander:
     password: $obfs
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -56,8 +83,9 @@ outbounds:
     direct:
       mode: 64" >server.yaml
             else
-                echo "listen: $server_port
+                echo "listen: :$server_port
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -106,12 +134,13 @@ outbounds:
     else
         if $hysteria2
             if test "$obfs" = true
-                echo "listen: $server_port
+                echo "listen: :$server_port
 obfs:
   type: salamander
   salamander:
     password: $obfs
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -123,8 +152,9 @@ outbounds:
   - name: defob
     type: direct" >server.yaml
             else
-                echo "listen: $server_port
+                echo "listen: :$server_port
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -167,11 +197,20 @@ outbounds:
             end
         end
     end
-    echo '#!/usr/bin/fish
+    if $hysteria2
+        echo '#!/usr/bin/fish
+if ./bin/yq \'.users[].uuid\' userlist | string match -q "$argv[2]"
+  printf "$argv[2]"
+else
+    exit 1
+end' >knck
+    else
+        echo '#!/usr/bin/fish
 if ./bin/yq \'.users[].uuid\' userlist | string match -q "$argv[2]"
 else
     exit 1
 end' >knck
+    end
     chmod +x knck
     # Launch core
     if $hysteria2

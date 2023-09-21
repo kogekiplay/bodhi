@@ -185,27 +185,6 @@ obfs=true' >"$bodhi_conf"
             exit 0
         end
     end
-    # Check TLSnec
-    # Check core
-    if test -e $tls_cert; and test -e $tls_key
-    else
-        logger 5 "@bodhi.init HALT -> TLS cert or TLS key is not found at bodhi.tls_x"
-        exit 1
-    end
-    if test -e "$core_path"
-        if test -x "$core_path"
-        else
-            chmod +x "$core_path"
-            if set hysteria_ver ($core_path -v)
-            else
-                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
-                exit 1
-            end
-        end
-    else
-        logger 5 "@bodhi.init HALT -> Hysteria core is not found at bodhi.core_path"
-        exit 1
-    end
 end
 
 function push
@@ -236,7 +215,42 @@ function push
                 end
             else
                 # Loop to collect data High-Passly
-                # Stay tuned
+                set hy2_return_data '{}'
+                set hy2_stat (curl -sL "http://127.0.0.1:$api_port/traffic")
+                if test -z "$hy2_stat"
+                else
+                    for hy2_uuid in (echo "$hy2_stat" | yq e 'keys | .[]')
+                        set hy2_id (contains --index "$hy2_uuid" "$uuid")
+                        set hy2_download[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.rx")
+                        set hy2_upload[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.tx")
+                        set hy2_return_data (echo -n "$hy2_return_data" | yq -o=json ".$hy2_id = [$hy2_upload[$hy2_id], $hy2_download[$hy2_id]]")
+                    end
+                end
+            end
+            # Report data to panel
+            if test "$hy2_return_data" = '{}'
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
+                end
+            else
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> Ready to push with following data"
+                    logger 3 "$hy2_return_data"
+                end
+                set clength (echo -n "$hy2_return_data" | wc -c)
+                curl -sL -X POST -H "Content-Type: application/json" -H "Content-Length: $clength" -d "$hy2_return_data" "$upstream_api/api/v1/server/UniProxy/push?node_id=$nodeid&node_type=hysteria&token=$psk" | yq
+                # Refresh data
+                if curl -sL "http://127.0.0.1:$api_port/traffic?clear=1"; and test "$bodhi_verbose" = debug
+                    logger 3 "
+@bodhi.push CONT -> Stats purged"
+                end
+            end
+            if test "$raw_conf_md5_check" != "$argv[3]"
+                set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
+                if string match -q '*obfs*' -- $raw_conf
+                    logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
+                    break
+                end
             end
         else
             set raw_statis (curl -sL "http://127.0.0.1:$api_port/metrics" | string collect)
@@ -342,8 +356,34 @@ function chamber
     set down_mbps (echo "$raw_conf" | yq .down_mbps)
     set obfs (echo "$raw_conf" | yq .obfs)
     set push_interval (echo "$raw_conf" | yq .base_config.push_interval)
+    # Check TLSnec
+    # Check core
+    if test -e $tls_cert; and test -e $tls_key
+    else
+        logger 5 "@bodhi.init HALT -> TLS cert or TLS key is not found at bodhi.tls_x"
+        exit 1
+    end
+    if test -e "$core_path"
+        if test -x "$core_path"
+            if set hysteria_ver ($core_path version)
+            else
+                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                exit 1
+            end
+        else
+            chmod +x "$core_path"
+            if set hysteria_ver ($core_path version)
+            else
+                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                exit 1
+            end
+        end
+    else
+        logger 5 "@bodhi.init HALT -> Hysteria core is not found at bodhi.core_path"
+        exit 1
+    end
     # detect hysteria ver
-    if echo "$hysteria_ver" | string match -q v2
+    if echo "$hysteria_ver" | string match -qe v2
         set -x hysteria2 true
     else
         set -x hysteria2 false
@@ -351,12 +391,13 @@ function chamber
     if $ipv6
         if $hysteria2
             if test "$obfs" = true
-                echo "listen: $server_port
+                echo "listen: :$server_port
 obfs:
   type: salamander
   salamander:
     password: $obfs
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -370,8 +411,9 @@ outbounds:
     direct:
       mode: 64" >server.yaml
             else
-                echo "listen: $server_port
+                echo "listen: :$server_port
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -420,12 +462,13 @@ outbounds:
     else
         if $hysteria2
             if test "$obfs" = true
-                echo "listen: $server_port
+                echo "listen: :$server_port
 obfs:
   type: salamander
   salamander:
     password: $obfs
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -437,8 +480,9 @@ outbounds:
   - name: defob
     type: direct" >server.yaml
             else
-                echo "listen: $server_port
+                echo "listen: :$server_port
 tls:
+  type: tls
   cert: $tls_cert
   key: $tls_key
 auth:
@@ -481,11 +525,20 @@ outbounds:
             end
         end
     end
-    echo '#!/usr/bin/fish
+    if $hysteria2
+        echo '#!/usr/bin/fish
+if ./bin/yq \'.users[].uuid\' userlist | string match -q "$argv[2]"
+  printf "$argv[2]"
+else
+    exit 1
+end' >knck
+    else
+        echo '#!/usr/bin/fish
 if ./bin/yq \'.users[].uuid\' userlist | string match -q "$argv[2]"
 else
     exit 1
 end' >knck
+    end
     chmod +x knck
     # Launch core
     if $hysteria2

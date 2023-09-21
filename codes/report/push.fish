@@ -26,7 +26,42 @@ function push
                 end
             else
                 # Loop to collect data High-Passly
-                # Stay tuned
+                set hy2_return_data '{}'
+                set hy2_stat (curl -sL "http://127.0.0.1:$api_port/traffic")
+                if test -z "$hy2_stat"
+                else
+                    for hy2_uuid in (echo "$hy2_stat" | yq e 'keys | .[]')
+                        set hy2_id (contains --index "$hy2_uuid" "$uuid")
+                        set hy2_download[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.rx")
+                        set hy2_upload[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.tx")
+                        set hy2_return_data (echo -n "$hy2_return_data" | yq -o=json ".$hy2_id = [$hy2_upload[$hy2_id], $hy2_download[$hy2_id]]")
+                    end
+                end
+            end
+            # Report data to panel
+            if test "$hy2_return_data" = '{}'
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
+                end
+            else
+                if test "$bodhi_verbose" = debug
+                    logger 3 "@bodhi.push CONT -> Ready to push with following data"
+                    logger 3 "$hy2_return_data"
+                end
+                set clength (echo -n "$hy2_return_data" | wc -c)
+                curl -sL -X POST -H "Content-Type: application/json" -H "Content-Length: $clength" -d "$hy2_return_data" "$upstream_api/api/v1/server/UniProxy/push?node_id=$nodeid&node_type=hysteria&token=$psk" | yq
+                # Refresh data
+                if curl -sL "http://127.0.0.1:$api_port/traffic?clear=1"; and test "$bodhi_verbose" = debug
+                    logger 3 "
+@bodhi.push CONT -> Stats purged"
+                end
+            end
+            if test "$raw_conf_md5_check" != "$argv[3]"
+                set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
+                if string match -q '*obfs*' -- $raw_conf
+                    logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
+                    break
+                end
             end
         else
             set raw_statis (curl -sL "http://127.0.0.1:$api_port/metrics" | string collect)
