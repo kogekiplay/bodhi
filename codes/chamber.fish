@@ -37,17 +37,23 @@ function chamber
     end
     if test -e "$core_path"
         if test -x "$core_path"
-            if set hysteria_ver ($core_path version)
+            if set hysteria_ver ("$core_path" version)
             else
-                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
-                exit 1
+                if set hysteria_ver ("$core_path" -v)
+                else
+                    logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                    exit 1
+                end
             end
         else
             chmod +x "$core_path"
-            if set hysteria_ver ($core_path version)
+            if set hysteria_ver ("$core_path" version)
             else
-                logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
-                exit 1
+                if set hysteria_ver ("$core_path" -v)
+                else
+                    logger 5 "@bodhi.init HALT -> Unable to ign hysteria core"
+                    exit 1
+                end
             end
         end
     else
