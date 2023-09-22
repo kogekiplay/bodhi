@@ -201,30 +201,16 @@ function push
         end
         # fetch data from api
         if $hysteria2
-            set raw_statis (curl -sL "http://127.0.0.1:$api_port/traffic")
-            if test "$raw_statis" = "{}"
-                if test "$bodhi_verbose" = debug
-                    logger 3 "@bodhi.push CONT -> No usage, skip reporting"
-                end
-                if test "$raw_conf_md5_check" != "$argv[3]"
-                    set raw_conf (curl -sL "$upstream_api/api/v1/server/UniProxy/config?node_id=$nodeid&node_type=hysteria&token=$psk")
-                    if string match -q '*obfs*' -- $raw_conf
-                        logger 4 "@bodhi.push WARN -> New config from panel arrived, re-init server"
-                        break
-                    end
-                end
+            # Loop to collect data High-Passly
+            set hy2_return_data '{}'
+            set hy2_stat (curl -sL "http://127.0.0.1:$api_port/traffic")
+            if test -z "$hy2_stat"
             else
-                # Loop to collect data High-Passly
-                set hy2_return_data '{}'
-                set hy2_stat (curl -sL "http://127.0.0.1:$api_port/traffic")
-                if test -z "$hy2_stat"
-                else
-                    for hy2_uuid in (echo "$hy2_stat" | yq e 'keys | .[]')
-                        set hy2_id (contains --index "$hy2_uuid" "$uuid")
-                        set hy2_download[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.rx")
-                        set hy2_upload[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.tx")
-                        set hy2_return_data (echo -n "$hy2_return_data" | yq -o=json ".$hy2_id = [$hy2_upload[$hy2_id], $hy2_download[$hy2_id]]")
-                    end
+                for hy2_uuid in (echo "$hy2_stat" | yq e 'keys | .[]')
+                    set hy2_id (contains --index "$hy2_uuid" "$uuid")
+                    set hy2_download[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.rx")
+                    set hy2_upload[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.tx")
+                    set hy2_return_data (echo -n "$hy2_return_data" | yq -o=json ".$hy2_id = [$hy2_upload[$hy2_id], $hy2_download[$hy2_id]]")
                 end
             end
             # Report data to panel
@@ -569,7 +555,7 @@ switch $argv[1]
     case h help
         help_echo
     case v version
-        logger 0 'Genshin@rev1'
+        logger 0 'Genshin@rev2'
     case '*'
         # def var
         set -x bodhi_conf bodhi_root bodhi_verbose upstream_api api_port loc tls_cert nodeid tls_key psk hysteria_ver ipv6
