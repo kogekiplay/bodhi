@@ -227,8 +227,8 @@ function push
                 curl -sL -X POST -H "Content-Type: application/json" -H "Content-Length: $clength" -d "$hy2_return_data" "$upstream_api/api/v1/server/UniProxy/push?node_id=$nodeid&node_type=hysteria&token=$psk" | yq
                 # Refresh data
                 if curl -sL "http://127.0.0.1:$api_port/traffic?clear=1"; and test "$bodhi_verbose" = debug
-                    logger 3 "
-@bodhi.push CONT -> Stats purged"
+                    echo
+                    logger 3 "@bodhi.push CONT -> Stats purged"
                 end
             end
             if test "$raw_conf_md5_check" != "$argv[3]"
