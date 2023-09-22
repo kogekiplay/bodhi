@@ -18,10 +18,9 @@ function push
             if test -z "$hy2_stat"
             else
                 for hy2_uuid in (echo "$hy2_stat" | yq e 'keys | .[]')
-                    set hy2_id (contains --index "$hy2_uuid" "$uuid")
+                    set hy2_id (contains --index "$hy2_uuid" $uuid)
                     set hy2_download[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.rx")
                     set hy2_upload[$hy2_id] (echo "$hy2_stat" | yq ".$hy2_uuid.tx")
-                    echo test $hy2_uuid $hy2_download[$hy2_id] $hy2_upload[$hy2_id]
                     set hy2_return_data (echo -n "$hy2_return_data" | yq -o=json ".$hy2_id = [$hy2_upload[$hy2_id], $hy2_download[$hy2_id]]")
                 end
             end
