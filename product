@@ -383,7 +383,7 @@ function chamber
     if $ipv6
         if $hysteria2
             if test "$obfs" = true
-                echo "listen: :$server_port
+                echo "listen: :14444
 obfs:
   type: salamander
   salamander:
@@ -403,7 +403,7 @@ outbounds:
     direct:
       mode: 64" >server.yaml
             else
-                echo "listen: :$server_port
+                echo "listen: :14444
 tls:
   type: tls
   cert: $tls_cert
@@ -422,7 +422,7 @@ outbounds:
         else
             if test "$obfs" = true
                 echo "{
-    \"listen\": \":$server_port\",
+    \"listen\": \":14444\",
     \"obfs\": \"$obfs\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
@@ -437,7 +437,7 @@ outbounds:
 }" >server.json
             else
                 echo "{
-    \"listen\": \":$server_port\",
+    \"listen\": \":14444\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
     \"resolve_preference\": \"64\",
@@ -454,7 +454,7 @@ outbounds:
     else
         if $hysteria2
             if test "$obfs" = true
-                echo "listen: :$server_port
+                echo "listen: :14444
 obfs:
   type: salamander
   salamander:
@@ -472,7 +472,7 @@ outbounds:
   - name: defob
     type: direct" >server.yaml
             else
-                echo "listen: :$server_port
+                echo "listen: :14444
 tls:
   type: tls
   cert: $tls_cert
@@ -489,7 +489,7 @@ outbounds:
         else
             if test "$obfs" = true
                 echo "{
-    \"listen\": \":$server_port\",
+    \"listen\": \":14444\",
     \"obfs\": \"$obfs\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
@@ -503,7 +503,7 @@ outbounds:
 }" >server.json
             else
                 echo "{
-    \"listen\": \":$server_port\",
+    \"listen\": \":14444\",
     \"cert\": \"$tls_cert\",
     \"prometheus_listen\": \"127.0.0.1:$api_port\",
     \"key\": \"$tls_key\" ,
